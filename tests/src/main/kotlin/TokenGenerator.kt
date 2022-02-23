@@ -37,41 +37,30 @@ import org.bouncycastle.openssl.jcajce.JcaPEMKeyConverter;
 
 class TokenGenerator {
 
-    val daps_url : String = "http://localhost:4567/";
-    //val daps_url : String = "https://daps-dev.aisec.fraunhofer.de/v2/";
+    val daps_url : String = File("test_config.txt").readLines().get(12).split("=")[1];
 
-    fun getPrivAsymmetricKey(pemFile : String) : PrivateKey{
+    fun getPrivKey(pemFile : String, alg : String) : PrivateKey{
         val privateKeyString : String = File(pemFile).readText(Charsets.UTF_8);
         val keyString : String = privateKeyString.replace("-----BEGIN PRIVATE KEY-----", "")
                                                  .replace(System.lineSeparator(),"")
                                                  .replace("-----END PRIVATE KEY-----", "");
         val decoder : Decoder = Base64.getDecoder();
         val decoded : ByteArray = decoder.decode(keyString);
-        val keyFactory : KeyFactory = KeyFactory.getInstance("RSA");
+        var keyFactory : KeyFactory; 
+        if(alg.equals("ES256") || alg.equals("ES512")){
+            keyFactory = KeyFactory.getInstance("EC");
+        }else{
+            keyFactory = KeyFactory.getInstance("RSA");
+        }
         val keySpec : PKCS8EncodedKeySpec = PKCS8EncodedKeySpec(decoded);
         val privKey : PrivateKey = keyFactory.generatePrivate(keySpec);
         return privKey;
-    }
-
-    fun getPrivSymmetricKey(pemFile : String) : PrivateKey{
-        val pemParser : PEMParser = PEMParser(InputStreamReader(FileInputStream(pemFile)));
-        val pemKeyPair : PEMKeyPair = pemParser.readObject() as PEMKeyPair;
-        val converter : JcaPEMKeyConverter = JcaPEMKeyConverter();
-        val ecKey : PrivateKey = converter.getKeyPair(pemKeyPair).getPrivate();
-        return ecKey;
     }
  
     fun getToken(iss : String, aud : String, sub : String, context : String, type : String,
                 iat : Long, nbf : Long, exp : Long, pemFile : String, alg : String): String {
         //Get private key from pem file in PKCS8 format
-        var privKey : PrivateKey;
-        if(alg.equals("RS256") || alg.equals("RS512") || alg.equals("PS256") || alg.equals("PS512")){
-            privKey = getPrivAsymmetricKey(pemFile);
-        }else if(alg.equals("ES256") || alg.equals("ES512")){
-            privKey = getPrivSymmetricKey(pemFile);
-        }else{
-            return "";
-        }
+        var privKey : PrivateKey = getPrivKey(pemFile, alg);
         
 
         try {
@@ -259,14 +248,6 @@ fun getTokenNaN(): String {
         val pemWriter : JcaPEMWriter = JcaPEMWriter(stringWriter);
         pemWriter.writeObject(pubKey);
         pemWriter.close();
-        val pemString : String = stringWriter.toString();
-
-        val keyString : String = pemString.replace("-----BEGIN PUBLIC KEY-----", "")
-                                                 .replace(System.lineSeparator(),"")
-                                                 .replace("-----END PUBLIC KEY-----", "");
-        val decoder : Decoder = Base64.getDecoder();
-        val decoded : ByteArray = decoder.decode(keyString);
-        val secretKeySpec : SecretKeySpec = SecretKeySpec(decoded, "HmacSHA256");
         
         try {
             //Set claims for jwt (jose4j)
@@ -288,16 +269,6 @@ fun getTokenNaN(): String {
             jws.setDoKeyValidation(false);
             val jwt : String = jws.getCompactSerialization();
             println("JWT: "+jwt);
-
-            //Verify token just to check if key was correctly loaded and jwt correctly signed
-            var iss : String = "EE:93:13:B5:4F:A9:1B:F1:71:53:72:9D:7C:65:49:61:F2:6D:2C:12:"+
-				      "keyid:EE:93:13:B5:4F:A9:1B:F1:71:53:72:9D:7C:65:49:61:F2:6D:2C:12";
-            val jwtConsumer : JwtConsumer = JwtConsumerBuilder()
-                                            .setRequireExpirationTime()
-                                            .setExpectedIssuer(iss)
-                                            .setExpectedAudience("http://localhost:4567")
-                                            .setVerificationKey(secretKeySpec)
-                                            .build();
             
             //Build request string
             val req : String = "grant_type=client_credentials&"+
@@ -355,19 +326,19 @@ fun getTokenNaN(): String {
         try {
             val claims : JwtClaims = jwtConsumer.processToClaims(access_token);
             //Process claims accordingly
-            /*if (!claims.getClaimValue("@type").equals(type)){
+            if (!claims.getClaimValue("@type").equals(type)){
                 throw Exception("\nFailed @type verification\nGot @type: "
                                 +claims.getClaimValue("@type").toString()+"\n");
             }
             if (!claims.getClaimValue("@context").equals(context)){
                 throw Exception("\nFailed @context verification\nGot @context: "
                                 +claims.getClaimValue("@context").toString()+"\n");
-            }*/
+            }
             if (!claims.getSubject().equals(sub)){
                 throw Exception("\nFailed subject verification\nGot subject: "
                                 +claims.getSubject()+"\n");
             }
-            /*if (!claims.getClaimValue("securityProfile").equals(secProf)){
+            if (!claims.getClaimValue("securityProfile").equals(secProf)){
                 throw Exception("\nFailed securityProfile verification\nGot securityProfile: "
                                 +claims.getClaimValue("securityProfile").toString()+"\n");
             }
@@ -378,17 +349,10 @@ fun getTokenNaN(): String {
             if (!claims.getClaimValue("transportCertsSha256").equals(transCert)){
                 throw Exception("\nFailed transportCertsSha256 verification\nGot transportCertsSha256: "
                                 +claims.getClaimValue("transportCertsSha256").toString()+"\n");
-            }*/
-            //TODO: Improve scopes check if they are more scopes than one contained
-            val runtimeScope : Any = claims.getClaimValue("scopes");
-            if(runtimeScope is ArrayList<*>){
-                if(!runtimeScope.contains(scope)){
-                    throw Exception("\nFailed scopes verification\nGot scopes: "
-                                +claims.getClaimValue("scopes").toString()+"\n");
-                }
-            }else{
-                throw Exception("\nFailed scopes verification, scopes is not an ArrayList\nGot scopes: "
-                                +claims.getClaimValue("referringConnector").toString()+"\n");
+            }
+            if (!claims.getClaimValue("scope").equals(scope)){
+                throw Exception("\nFailed scope verification\nGot scope: "
+                                +claims.getClaimValue("scope").toString()+"\n");
             }
 
             println("Verification successful\n");

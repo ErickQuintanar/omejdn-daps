@@ -103,6 +103,48 @@ Be aware that Omejdn has its own folder labeled scripts, which is not the one me
 $ scripts/test.sh CLIENT_NAME
 ```
 
+## Testing the DAPS
+
+ You can test the DAPS implementation with the provided Dockerfile, however, previous configuration is required. Before creating the image with the Dockerfile, the certificates and keys for 2 clients, and the DAPS signing key should be placed in the `keys` directory. A configuration file should be placed in `tests/test_config.txt`. The configuration file contains information about the clients in order to correctly request DAT tokens. An example configuration file is as follows:
+ ```
+ iss=01:02:21:92:F6:27:E2:05:B6:6C:A7:D0:6B:33:63:4C:CC:FB:1C:30:keyid:01:02:21:92:F6:27:E2:05:B6:6C:A7:D0:6B:33:63:4C:CC:FB:1C:30
+ aud=idsc:IDS_CONNECTORS_ALL
+ iss_daps=http://daps.example.com
+ securityProfile=idsc:BASE_SECURITY_PROFILE
+ referringConnector=http://test1.demo
+ @type=ids:DatPayload
+ @context=https://w3id.org/idsa/contexts/context.jsonld
+ scope=idsc:IDS_CONNECTOR_ATTRIBUTES_ALL
+ transportCertsSha256=39d625f6069d1ad5947160ebc7686e4ac6dfe52876d82ba1ef18ed9640bd0db7
+ keyPath=../keys/test1.key
+ keyPath2=../keys/test2.key
+ iss2=70:43:A0:57:58:49:1D:1A:5F:61:8C:35:4D:74:76:C7:FF:A4:44:97:keyid:70:43:A0:57:58:49:1D:1A:5F:61:8C:35:4D:74:76:C7:FF:A4:44:97
+ url=http://localhost:4567/
+ ```
+ Each line in the configuration file is an attribute required in that specific order and to be separated with an equal sign without spaces. The attributes refer to:
+ - iss: `client_id` for the first client.
+ - aud: Audience for the first client.
+ - iss_daps: DAPS issuer for DAT tokens.
+ - securityProfile: Expected security profile in DAT.
+ - referringConnector: URI of the first client.
+ - @type: Type of the DAT token.
+ - @context: Context containing the IDS classes.
+ - scope: List of scopes in the DAT.
+ - transporteCertSha256: The public transportation key from the first client used to request a DAT token.
+ - keyPath: Path to the first client's key.
+ - keyPath2: Path to the second client's key.
+ - iss2: `client_id` for the second client.
+ - url: Address at which the DAPS server can be contacted.
+
+ Once all the required material for the testing is ready, we can start testing a DAPS instance by creating a docker image and the running a container. In order to create the image execute:
+ ```
+ $ docker build . -t daps-test
+ ```
+And then to run the container with the tests simply execute:
+ ```
+ $ docker run --name=test daps-test
+ ```
+
 ## Going Forward
 
 While the above configuration should be sufficient for testing purposes,

@@ -72,11 +72,6 @@
             <artifactId>bcpkix-jdk15on</artifactId>
             <version>1.69</version>
         </dependency>
-        <dependency>
-            <groupId>com.jaredrummler</groupId>
-            <artifactId>ktsh</artifactId>
-            <version>1.0.0</version>
-        </dependency>
     </dependencies>
 
     <build>
